@@ -5,6 +5,8 @@ There are data simulation codes, helper functions and the solution templates for
 ## List of Questions
 **2.3 Likelihood of a tree GM only for E level**
 
+There are three different trees in 2.3/data folder. Each tree has 5 samples. Calculate the likelihood of each sample and report them.
+
 **2.5 Likelihood of a tree GM**
 
 **2.6 Super epicentra - EM**
