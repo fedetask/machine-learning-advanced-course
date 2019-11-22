@@ -9,8 +9,6 @@ There are data simulation codes, helper functions and the solution templates for
 
 **2.6 Super epicentra - EM**
 
-**2.7 Super epicentra - VI**
-
 **2.8 Sampling from a tree GM**
 
 **2.9 Failing components VI**
