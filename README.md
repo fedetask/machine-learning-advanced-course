@@ -9,6 +9,8 @@ There are three different trees in 2.3/data folder. Each tree has 5 samples. Cal
 
 **2.5 Likelihood of a tree GM**
 
+There are three different tree mixtures in 2.5/data folder. Run EM algorithm. Compare the real and inferred mixtures in terms of Robinson-Foulds metric and likelihood.  
+
 **2.6 Super epicentra - EM**
 
 **2.8 Sampling from a tree GM**
