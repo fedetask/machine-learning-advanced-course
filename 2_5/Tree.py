@@ -687,31 +687,5 @@ def main():
     tm2.print()
 
 
-def main2():
-    print("Data gen for 2.5")
-
-    print("\n6. Generate an empty tree mixture and print it:\n")
-    seed_val = 422
-    num_nodes = 20
-    num_samples = 20
-    num_clusters = 4
-
-    tm = TreeMixture(num_clusters, num_nodes)
-    tm.simulate_pi(seed_val=seed_val)
-    tm.simulate_trees(seed_val=seed_val)
-    tm.sample_mixtures(num_samples, seed_val=seed_val)
-    tm.print()
-
-    print("\n9. Save the tree mixture:\n")
-    filename = "data/q_2_5_tm_20node_20sample_4clusters.pkl"
-    tm.save_mixture(filename, save_arrays=True)
-
-    #print("\n10. Load the tree mixture from pickle file and print it:\n")
-    #filename = "data/example_tree_mixture.pkl"
-    #tm2 = TreeMixture(0, 0)
-    #tm2.load_mixture(filename)
-    #tm2.print()
-
-
 if __name__ == "__main__":
-    main2()
+    main()

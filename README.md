@@ -2,6 +2,8 @@
 This repository contains the code templates for Assignment 2. 
 There are data simulation codes, helper functions and the solution templates for students.
 
+Check Tree.py and tree_example_folder to see example usages of tree / tree-mixture generators. Note that you don't have to use this code in your solutions.
+
 ## List of Questions
 **2.3 Likelihood of a tree GM only for E level**
 

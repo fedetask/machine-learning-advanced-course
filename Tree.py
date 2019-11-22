@@ -642,7 +642,7 @@ def main():
     t.print_topology()
 
     print("\n4. Save Tree to file\n")
-    filename = "data/example_tree.pkl"
+    filename = "tree_example_folder/example_tree.pkl"
     t.save_tree(filename, save_arrays=True)
 
     print("\n5. Load Tree from file and print it:\n")
@@ -677,11 +677,11 @@ def main():
     tm.print()
 
     print("\n9. Save the tree mixture:\n")
-    filename = "data/example_tree_mixture.pkl"
+    filename = "tree_example_folder/example_tree_mixture.pkl"
     tm.save_mixture(filename, save_arrays=True)
 
     print("\n10. Load the tree mixture from pickle file and print it:\n")
-    filename = "data/example_tree_mixture.pkl"
+    filename = "tree_example_folder/example_tree_mixture.pkl"
     tm2 = TreeMixture(0, 0)
     tm2.load_mixture(filename)
     tm2.print()
