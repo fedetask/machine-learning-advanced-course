@@ -14,6 +14,8 @@ There are three different trees in 2.3/data folder. Each tree has 5 samples. Cal
 There are three different tree mixtures in 2.5/data folder. Run EM algorithm. Compare the real and inferred mixtures in terms of Robinson-Foulds metric and likelihood.  
 
 **2.6 Super epicentra - EM**
+Complete the code in 2_6.py. There are two datasets concerning mixture models with 2 and 3 numbers of components (the code for data generation is in the same file).
+Explain the plots in how they make sense.
 
 **2.8 Sampling from a tree GM**
 
