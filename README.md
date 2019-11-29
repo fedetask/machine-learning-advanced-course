@@ -19,4 +19,3 @@ Explain the plots in how they make sense.
 
 **2.8 Sampling from a tree GM**
 
-**2.9 Failing components VI**
