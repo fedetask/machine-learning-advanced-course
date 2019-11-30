@@ -3,7 +3,7 @@
 
 For this task you are supposed to implement algorithms for dynamic programming and sampling.
 In addition, you should sample n (at least 1000) sets of leaves from the provided tree, and compute the proportion
-of leaf sets that fall into the provided interval.
+of leaf sets that fall into the provided interval (list of values for each node).
 
 #### Loading trees
 
@@ -30,9 +30,20 @@ most_freq_dict = load_interval('interval_task_2_8.npy')
 Use your sampling function to sample n sets of leaves and compute the following values:
 
 For the dictionary 'interval_task_2_8' compute the proportion of sampled leaf sets that matches the values of the dictionary.
-The dictionary contains keys for each leaf node, and each node has a list of allowed values. If each of your sampled leaf values of a single
-set can be found in the dictionary, that sampled set is within the interval.
+The dictionary contains keys for each leaf node, and each node has a list of values. If each of your sampled leaf values of a single
+set can be found in the dictionary, that sampled set is within the interval. E.g.
+
+```
+sampled_leaves = {'5': 3, '4': 2}
+dictionary = {'5': [2, 3], '4': [1, 3, 5]}
+```
+would mean that that sample didn't fully fall into the value sets of the dictionary.
 
 For 'node_interval_task_2_8' we compute the same but for each leaf node separately instead of the whole set. In other words, for each
-leaf node we wish to compute the proportion of sampled values that are found in the dictionary. The result should be a value for each leaf node.
-The file 2_8.py contains to functions to give you the idea, although it expects your samples to be in a certain format.
+leaf node we wish to compute the proportion of sampled values that are found in the dictionary. The result should be a value for each leaf node. E.g.
+```
+sampled_leaves = {'5': 3, '4': 2}
+dictionary = {'5': [2, 3], '4': [1, 3, 5]}
+```
+means node '5' falls into the dictionary, but '4' doesn't.
+The file 2_8.py contains functions to give you the idea, although it expects your samples to be as a dictionary with node names as keys.
