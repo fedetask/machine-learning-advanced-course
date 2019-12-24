@@ -69,6 +69,66 @@ def save_results(loglikelihood, topology_array, theta_array, filename):
     np.save(topology_array_filename, topology_array)
     np.save(theta_array_filename, theta_array)
 
+def p_x_given_tree(x, tree):
+    """ Compute the probability of x given the tree
+    Parameters:
+        x    --list of values for each node of the tree in bfs order
+        tree -- Tree object, represents the graphical model
+    
+    Returns:
+        Probability of x given the tree
+    """
+    p = 1
+    if tree.num_nodes > 0:
+        visit_list = [tree.root]
+
+        while len(visit_list) != 0:
+            cur_node = visit_list[0]
+            cur_node_idx = int(cur_node.name)
+            visit_list = visit_list[1:] + cur_node.descendants
+            
+            if cur_node == tree.root:
+                p *= cur_node.cat[x[cur_node_idx]]
+            else:
+                par_node_idx = int(cur_node.ancestor.name)
+                par_k = x[par_node_idx]
+                p *= cur_node.cat[par_k][x[cur_node_idx]]
+    return p
+
+def p_x_marginal(x, trees, pi):
+    """ Compute the marginal probability of x
+
+    Parameters:
+        x     -- List of values for each node of the tree in bfs order
+        trees -- List of Tree objects
+        pi    -- List of probabilities. pi[i] = probability of tree i
+    
+    Returns:
+        Probability of x marginalised over all the trees
+    """
+    p = 0
+    for p_tree, tree in zip(trees):
+        p += p_x_given_tree(x, tree) * p_tree
+    return p
+
+def responsibilities(samples, trees, pi):
+    """Compute the responsibilities for each sample and each tree
+
+    Parameters:
+        samples -- Numpy array (num_samples, num_nodes) with samples on the rows
+        trees   -- List of Tree objects
+        pi      -- List of probabilities. pi[i] = probability of tree i
+    
+    Returns:
+        A Numpy array (samples.shape[0], len(trees)) in which the element at i,j is the
+        responsibility of tree j for sample i
+    """
+    resp = np.empty((samples.shape[0], len(trees)))
+    for sample_idx, x in enumerate(samples):
+        for tree_idx, tree in enumerate(trees):
+            resp[sample_idx, tree_idx] = pi[tree_idx] * p_x_given_tree(x, tree)\
+                    / p_x_marginal(x, trees, pi)
+    return resp
 
 def em_algorithm(seed_val, samples, num_clusters, max_num_iter=100):
     """
