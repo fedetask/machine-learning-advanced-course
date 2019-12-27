@@ -129,10 +129,10 @@ class Node:
         """ This function prints the node's information. """
 
         if self.ancestor is None:
-            print("\tNode: ", self.name, "\tParent: ", self.ancestor, "\tNum Children: ", len(self.descendants),
+            print("\tNode: ", str(self.name), "\tParent: ", self.ancestor, "\tNum Children: ", len(self.descendants),
                   "\tCat: ", self.cat)
         else:
-            print("\tNode: ", self.name, "\tParent: ", self.ancestor.name, "\tNum Children: ", len(self.descendants),
+            print("\tNode: ", str(self.name), "\tParent: ", str(self.ancestor.name), "\tNum Children: ", len(self.descendants),
                   "\tCat: ", self.cat)
 
 
@@ -383,7 +383,7 @@ class Tree:
         """ This function creates the Newick string of the tree. """
 
         sub_tree = tree_to_newick_rec(self.root)
-        s = '[&R] (' + sub_tree + ')' + self.root.name + ';'
+        s = '[&R] (' + sub_tree + ')' + str(self.root.name) + ';'
         return s
 
     def print_topology_array(self):
@@ -405,7 +405,7 @@ class Tree:
                 cur_node = visit_list[0]
                 cur_depth = visit_depth[0]
 
-                print("\t" * (cur_depth + 1) + cur_node.name)
+                print("\t" * (cur_depth + 1) + str(cur_node.name))
                 visit_list = visit_list[1:]
                 visit_list = cur_node.descendants + visit_list
                 visit_depth = visit_depth[1:]

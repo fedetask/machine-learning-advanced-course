@@ -48,7 +48,7 @@ def maximum_spanning_tree(graph):
     """ This function is the modified version of kruskal function.
         Given a graph with weighted edges, this function returns the maximum spanning tree. """
 
-    print("Running maximum spanning tree algorithm...")
+#    print("Running maximum spanning tree algorithm...")
 
     for vertex in graph['vertices']:
         make_set(vertex)
