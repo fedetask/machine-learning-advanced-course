@@ -54,6 +54,11 @@
 import argparse
 import numpy as np
 import matplotlib.pyplot as plt
+import itertools as it
+import sys
+from Tree import Tree, TreeMixture, Node
+from Kruskal_v2 import maximum_spanning_tree
+from tqdm import tqdm
 
 
 def save_results(loglikelihood, topology_array, theta_array, filename):
@@ -68,67 +73,6 @@ def save_results(loglikelihood, topology_array, theta_array, filename):
     np.save(likelihood_filename, loglikelihood)
     np.save(topology_array_filename, topology_array)
     np.save(theta_array_filename, theta_array)
-
-def p_x_given_tree(x, tree):
-    """ Compute the probability of x given the tree
-    Parameters:
-        x    --list of values for each node of the tree in bfs order
-        tree -- Tree object, represents the graphical model
-    
-    Returns:
-        Probability of x given the tree
-    """
-    p = 1
-    if tree.num_nodes > 0:
-        visit_list = [tree.root]
-
-        while len(visit_list) != 0:
-            cur_node = visit_list[0]
-            cur_node_idx = int(cur_node.name)
-            visit_list = visit_list[1:] + cur_node.descendants
-            
-            if cur_node == tree.root:
-                p *= cur_node.cat[x[cur_node_idx]]
-            else:
-                par_node_idx = int(cur_node.ancestor.name)
-                par_k = x[par_node_idx]
-                p *= cur_node.cat[par_k][x[cur_node_idx]]
-    return p
-
-def p_x_marginal(x, trees, pi):
-    """ Compute the marginal probability of x
-
-    Parameters:
-        x     -- List of values for each node of the tree in bfs order
-        trees -- List of Tree objects
-        pi    -- List of probabilities. pi[i] = probability of tree i
-    
-    Returns:
-        Probability of x marginalised over all the trees
-    """
-    p = 0
-    for p_tree, tree in zip(trees):
-        p += p_x_given_tree(x, tree) * p_tree
-    return p
-
-def responsibilities(samples, trees, pi):
-    """Compute the responsibilities for each sample and each tree
-
-    Parameters:
-        samples -- Numpy array (num_samples, num_nodes) with samples on the rows
-        trees   -- List of Tree objects
-        pi      -- List of probabilities. pi[i] = probability of tree i
-    
-    Returns:
-        A Numpy array (samples.shape[0], len(trees)) in which the element at i,j is the
-        responsibility of tree j for sample i
-    """
-    resp = np.empty((samples.shape[0], len(trees)))
-    for sample_idx, x in enumerate(samples):
-        for tree_idx, tree in enumerate(trees):
-            resp[sample_idx, tree_idx] = pi[tree_idx] * p_x_given_tree(x, tree)\
-                    / p_x_marginal(x, trees, pi)
-    return resp
 
 def em_algorithm(seed_val, samples, num_clusters, max_num_iter=100):
     """
@@ -153,35 +97,271 @@ def em_algorithm(seed_val, samples, num_clusters, max_num_iter=100):
 
     # TODO: Implement EM algorithm here.
 
-    # Start: Example Code Segment. Delete this segment completely before you implement the algorithm.
-    print("Running EM algorithm...")
+    # Initialize random trees and distribution
+    tree_mix = TreeMixture(num_clusters, samples.shape[1])
+    tree_mix.simulate_pi(seed_val)
+    tree_mix.simulate_trees(seed_val)
 
-    loglikelihood = []
+    loglikelihoods = []
+    for iter_ in tqdm(range(max_num_iter)):
+        resp = responsibilities(samples, tree_mix.clusters, tree_mix.pi)
+        new_pi = np.sum(resp, axis=0) / samples.shape[0]
 
-    for iter_ in range(max_num_iter):
-        loglikelihood.append(np.log((1 + iter_) / max_num_iter))
-
-    from Tree import TreeMixture
-
-    tm = TreeMixture(num_clusters=num_clusters, num_nodes=samples.shape[1])
-    tm.simulate_pi(seed_val=seed_val)
-    tm.simulate_trees(seed_val=seed_val)
-    tm.sample_mixtures(num_samples=samples.shape[0], seed_val=seed_val)
+        new_trees = []
+        # Creating graphs
+        for k in range(num_clusters):
+            graph = weighted_graph(samples, resp, k)
+            max_spanning_tree = maximum_spanning_tree(graph)
+            tree = to_tree_obj(max_spanning_tree, k, samples, resp)
+            new_trees.append(tree)
+        tree_mix.pi = new_pi
+        tree_mix.clusters = new_trees
+        lik = loglikelihood(samples, tree_mix)
+        loglikelihoods.append(lik)
 
     topology_list = []
     theta_list = []
-    for i in range(num_clusters):
-        topology_list.append(tm.clusters[i].get_topology_array())
-        theta_list.append(tm.clusters[i].get_theta_array())
+    for tree in tree_mix.clusters:
+        topology_list.append(tree.get_topology_array())
+        theta_list.append(tree.get_theta_array())
 
-    loglikelihood = np.array(loglikelihood)
+    loglikelihoods = np.array(loglikelihoods)
     topology_list = np.array(topology_list)
     theta_list = np.array(theta_list)
-    # End: Example Code Segment
+    return loglikelihoods, topology_list, theta_list
 
-    ###
+def responsibilities(samples, trees, pi):
+    """Compute the responsibilities for each sample and each tree
 
-    return loglikelihood, topology_list, theta_list
+    Parameters:
+        samples -- Numpy array (num_samples, num_nodes) with samples on the rows
+        trees   -- List of Tree objects
+        pi      -- List of probabilities. pi[i] = probability of tree i
+    
+    Returns:
+        A Numpy array (num_samples, num_trees) in which the element at i,j is the
+        responsibility of tree j for sample i
+    """
+    resp = np.empty((samples.shape[0], len(trees)))
+    for sample_idx, x in enumerate(samples):
+        for tree_idx, tree in enumerate(trees):
+            resp[sample_idx, tree_idx] = pi[tree_idx] * p_x_given_tree(x, tree)
+        resp[sample_idx, :] /= p_x_marginal(x, trees, pi)
+    return resp
+
+def p_x_given_tree(x, tree):
+    """ Compute the probability of x given the tree
+    Parameters:
+        x    --list of values for each node of the tree in bfs order
+        tree -- Tree object, represents the graphical model
+    
+    Returns:
+        Probability of x given the tree
+    """
+    p = 1
+    visit_list = [tree.root]
+
+    while len(visit_list) != 0:
+        cur_node = visit_list[0]
+        cur_node_idx = int(cur_node.name)
+        visit_list = visit_list[1:] + cur_node.descendants
+        
+        if cur_node == tree.root:
+            p *= cur_node.cat[x[cur_node_idx]]
+        else:
+            par_node_idx = int(cur_node.ancestor.name)
+            par_k = x[par_node_idx]
+            p *= cur_node.cat[par_k][x[cur_node_idx]]
+    if p == 0:
+        p = sys.float_info.epsilon
+    return p
+
+def p_x_marginal(x, trees, pi):
+    """ Compute the marginal probability of x
+
+    Parameters:
+        x     -- List of values for each node of the tree in bfs order
+        trees -- List of Tree objects
+        pi    -- List of probabilities. pi[i] = probability of tree i
+    
+    Returns:
+        Probability of x marginalised over all the trees
+    """
+    p = 0
+    for p_tree, tree in zip(pi, trees):
+        p += p_x_given_tree(x, tree) * p_tree
+    return p
+
+def weighted_graph(samples, resp, k):
+    """Creates a fully connected graph where the weight between vertices
+    s and t is the mutual information of the respective nodes in the samples,
+    computed by assuming the k-th graphical model
+
+    Parameters:
+        samples -- Numpy array (num_samples, num_nodes) with samples on the rows
+        resp    -- Responsibility matrix (num_samples, num_trees)
+        k       -- Index of graphical model for which the graph has to be computed
+
+    Returns:
+        Fully connected graph described above as a dictionary
+        { 'vertices' : list of indices of graphical model nodes
+          'edges'    : list of tuples (v_i, v_j, weight)
+        }
+    """
+    graph = {
+        'vertices' : list(range(samples.shape[1])),
+        'edges'    : [] 
+    }
+
+    for s in range(samples.shape[1]):
+        for t in range(s + 1, samples.shape[1]):
+            # Adding edge s->t with weight I_q_k(X_s, X_t)
+            w = mutual_information(s, t, k, samples, resp)
+            edge = (s, t, w)
+            graph['edges'].append(edge)
+    return graph
+
+def mutual_information(s, t, k, samples, resp):
+    """Compute the mutual information between nodes s and t in the samples assuming
+       the graphical model is k
+
+    Parameters:
+        s, t    -- Indices of the two nodes for which to compute the mut. information
+        k       -- Index of the graphical model assumed
+        samples -- Numpy array (num_samples, num_nodes) with samples on the rows
+        resp    -- Responsibility matrix (num_samples, num_trees)
+    
+    Returns:
+        Mutual information between node s and node t computed from the samples
+    """
+    # We need q_k(X_s = a, X_t = b) joint probability
+    # marginals: q_k(X_s = a) and q_k(X_s = b)
+
+    mut_inform = 0
+    for a, b in it.product([0, 1], repeat=2): # All variables are binary
+        joint = q(k, s, t, a, b, samples, resp)
+        marginal_s = q_marginal(k, s, a, samples, resp)
+        marginal_t = q_marginal(k, t, b, samples, resp) 
+        num = joint
+        denom = marginal_s * marginal_t 
+        if num == 0 or denom == 0:
+            continue # Avoid log(0)
+        mut_inform += joint * np.log(joint / (marginal_s * marginal_t))
+    return mut_inform
+
+def q(k, s, t, a, b, samples, resp):
+    """Compute q distribution for GM k, vertices s and t with values a, b
+
+    Parameters:
+        k       -- Index of graphical model to use in computation
+        s, t    -- Indices of vertices
+        a, b    -- a = value of vertice s, b = value of vertice t
+        samples -- Numpy array (num_samples, num_nodes) with samples on the rows
+        resp    -- Responsibility matrix (num_samples, num_trees)
+
+    Returns:
+        Ratio of vertex pairs s,t with values respectively a, b over all possible
+        combinations ov values for a and b, weighted by the respective responsibilities
+    """
+    count = lambda i, j : sum(resp[n, k] for n, x in enumerate(samples)
+                              if x[s] == i and x[t] == j)
+
+    num = count(a, b)
+    denom = sum(count(i, j) for i, j in it.product([0,1], repeat=2))
+    return num/denom
+
+def q_marginal(k, node, value, samples, resp):
+    """Compute q distribution for vertice at index node with given value.
+    """
+    count = lambda i : sum(resp[n, k] for n, x in enumerate(samples) if x[node] == i)
+    num = count(value)
+    denom = sum(count(j) for j in [0, 1])
+    return num/denom
+
+def to_tree_obj(spanning_tree, k, samples, resp):
+    """Computes a Tree object from the spanning tree. Categorical distributions are
+    computed from the samples and responsibilities
+
+    Parameters:
+        spanning_tree -- List of tuples (v_i, v_j weight)
+        k             -- Index of tree we're updating
+        samples       -- Numpy array (num_samples, num_nodes) with samples on the rows
+        resp          -- Responsibility matrix (num_samples, num_trees)
+
+    Returns:
+        Tree object with first vertex in the spanning tree as root and remaining nodes 
+        organised as a Tree, each node with its MLE q distribution
+    """
+    tree = Tree()
+    tree.root = Node(spanning_tree[0][0], [])
+    tree.k = 2
+    tree.newick = tree.get_tree_newick()
+    visit_list = [tree.root]
+    remaining_nodes = spanning_tree
+
+    while len(visit_list) != 0:
+        tree.num_nodes += 1
+        tree.num_leaves += 1
+        cur_node = visit_list[0]
+        # We're going to separate the remaining nodes in those that are connected
+        # to the current and those that aren't
+        connected = [edge for edge in remaining_nodes
+                     if edge[0] == int(cur_node.name) or edge[1] == int(cur_node.name)]
+        not_connected = [edge for edge in remaining_nodes
+                     if edge[0] != int(cur_node.name) and edge[1] != int(cur_node.name)]
+
+        # We create a Node for the connected nodes and add them as children to current node
+        for edge in connected:
+            other = edge[0] if edge[0] != int(cur_node.name) else edge[1]
+            child = Node(other, [])
+            child.ancestor = cur_node
+            cur_node.descendants.append(child)
+        visit_list = visit_list[1:] + cur_node.descendants
+        remaining_nodes = not_connected # Keep only nodes that aren't connected yet
+    
+    visit_list = [tree.root]
+    cont = 0
+    while len(visit_list) != 0:
+        cur_node = visit_list[0]
+        cur_node.name = cont 
+        cat = []
+        if cur_node.ancestor == None:
+            cat = [q_marginal(k, cont, 0, samples, resp),
+                   q_marginal(k, cont, 1, samples, resp)]
+        else:
+            parent_idx = int(cur_node.ancestor.name)
+            child_idx = int(cur_node.name)
+            for p in [0, 1]: # For possible values of parent
+                q_given_parent = [0, 0]
+                for c in [0, 1]: # For possible values of child
+                    q_given_parent[c] = q(k, parent_idx, child_idx, p, c, samples, resp)
+                    q_given_parent[c] /= q_marginal(k, parent_idx, p, samples, resp)
+                cat.append(q_given_parent)
+        cont += 1
+        cur_node.cat = cat
+        visit_list = visit_list[1:] + cur_node.descendants
+
+    return tree
+
+def loglikelihood(samples, tree_mixture):
+    # TODO How to compute log with sum inside?
+    """Compute P(samples)
+
+    Parameters:
+        samples      -- Numpy array (num_samples, num_nodes) with samples on the rows
+        tree_mixture -- TreeMixture object representing the graphical model mixture
+
+    Returns:
+        Probability of the samples
+    """
+    
+    p = 0
+    for tree, p_tree in zip(tree_mixture.clusters, tree_mixture.pi):
+        p_data = p_tree
+        for x in samples:
+            p_data *= p_x_given_tree(x, tree)
+        p += p_data
+    return np.log(p)
 
 
 def main():
