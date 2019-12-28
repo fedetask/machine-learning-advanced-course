@@ -56,10 +56,12 @@ import numpy as np
 import matplotlib.pyplot as plt
 import itertools as it
 import sys
+import dendropy
 from Tree import Tree, TreeMixture, Node
 from Kruskal_v2 import maximum_spanning_tree
 from tqdm import tqdm
 from em_algorithm import EM_Algorithm
+from Phylogeny import tree_to_newick_rec
 
 
 def save_results(loglikelihood, topology_array, theta_array, filename):
@@ -74,6 +76,13 @@ def save_results(loglikelihood, topology_array, theta_array, filename):
     np.save(likelihood_filename, loglikelihood)
     np.save(topology_array_filename, topology_array)
     np.save(theta_array_filename, theta_array)
+
+def em_algorithm(seed_val, samples, num_clusters, max_num_iter=100):
+    em = EM_Algorithm(samples, num_clusters, seed_val=seed_val)
+    em.initialize(100, 5) # Sieving
+    loglikelihood, topology_array, theta_array = em.optimize()
+    return loglikelihood, topology_array, theta_array
+    
 
 def main():
     # Code to process command line arguments
@@ -105,11 +114,9 @@ def main():
 
     print("\n2. Run EM Algorithm.\n")
 
-    #loglikelihood, topology_array, theta_array = em_algorithm(args.seed_val, samples, num_clusters=args.num_clusters)
-
-    em = EM_Algorithm(samples, args.num_clusters, seed_val=args.seed_val)
-    em.initialize(100, 20)
-    loglikelihood, topology_array, theta_array = em.optimize()
+    loglikelihood, topology_array, theta_array = em_algorithm(args.seed_val,
+                                                              samples,
+                                                              num_clusters=args.num_clusters)
 
     print("\n3. Save, print and plot the results.\n")
 
@@ -135,13 +142,49 @@ def main():
     print("\n4. Retrieve real results and compare.\n")
     if args.real_values_filename != "":
         print("\tComparing the results with real values...")
+        actual_tm = TreeMixture(args.num_clusters, num_nodes)
+        actual_tm.load_mixture(args.real_values_filename)
+
+        inferred_tm = TreeMixture(args.num_clusters, num_nodes)
+        inferred_tm.load_mixture(args.output_filename)
 
         print("\t4.1. Make the Robinson-Foulds distance analysis.\n")
-        # TODO: Do RF Comparison
+        diff = compute_tree_mix_diff(actual_tm, inferred_tm)
+        print("Total Robinson-Foulds distance: "+str(diff))
 
         print("\t4.2. Make the likelihood comparison.\n")
-        # TODO: Do Likelihood Comparison
+        actual_lik = actual_tm.likelihood_dataset(samples)
+        inferred_lik = inferred_tm.likelihood_dataset(samples)
+        print("Log-Likelihood of actual tree: "+str(actual_lik)+", inferred tree: "+str(inferred_lik))
 
+def compute_tree_mix_diff(actual_tm, inferred_tm):
+    actual_newicks = [tree_to_newick_rec(tree.root) for tree in actual_tm.clusters]
+    inferred_newicks = [tree_to_newick_rec(tree.root) for tree in inferred_tm.clusters]
+    
+    tns = dendropy.TaxonNamespace()
+    actual_trees = [dendropy.Tree.get(data=newick, schema="newick", taxon_namespace=tnx)
+           for newick in actual_newicks]
+    inferred_trees = [dendropy.Tree.get(data=newick, schema="newick", taxon_namespace=tnx)
+           for newick in inferred_newicks]
+    
+    assigned = [False for tree in actual_trees]
+    
+    # We assign each inferred tree to the actual tree with lowest symmetric distance and
+    # compute the sum of the assigned distances
+    tot_diff = 0
+    for inf_tree in inferred_trees:
+        best_diff = float('inf')
+        best_diff_idx = -1
+        for i, act_tree in enumerate(actual_trees):
+            if assigned[act_tree]:
+                continue
+            cur_diff = dendropy.calculate.treecompare.symmetric_difference(act_tree, inf_tree)
+            if cur_diff < best_diff:
+                best_diff = cur_diff
+                best_diff_idx = i
+        tot_diff += best_diff
+        assigned[best_diff_idx] = True
+    return tot_diff
 
 if __name__ == "__main__":
     main()
