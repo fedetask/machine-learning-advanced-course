@@ -77,10 +77,10 @@ def save_results(loglikelihood, topology_array, theta_array, filename):
     np.save(topology_array_filename, topology_array)
     np.save(theta_array_filename, theta_array)
 
-def em_algorithm(seed_val, samples, num_clusters, max_num_iter=100):
+def em_algorithm(seed_val, samples, num_clusters, max_num_iter=1000):
     em = EM_Algorithm(samples, num_clusters, seed_val=seed_val)
     em.initialize(100, 5) # Sieving
-    loglikelihood, topology_array, theta_array = em.optimize()
+    loglikelihood, topology_array, theta_array = em.optimize(max_num_iter)
     return loglikelihood, topology_array, theta_array
     
 
