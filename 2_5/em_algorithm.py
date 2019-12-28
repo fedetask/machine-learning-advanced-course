@@ -130,19 +130,6 @@ class EM_Algorithm:
         sum_resp = np.sum(resp, axis=0)
         p = 0
         for a, b in it.product([0, 1], repeat=2):
-            #q_s_t_a_b = sum(resp[n, k] for n in range(self.num_samples)
-            #               if self.samples[n, s] == a
-            #               and self.samples[n, t] == b)
-            #q_s_t_a_b /= sum_resp[k]
-            #if q_s_t_a_b == 0:
-            #    continue
-            #q_s_a = sum(resp[n, k] for n in range(self.num_samples)
-            #           if self.samples[n, s] == a)
-            #q_s_a /= sum_resp[k]
-
-            #q_t_b = sum(resp[n, k] for n in range(self.num_samples)
-            #           if self.samples[n, t] == b)
-            #q_t_b /= sum_resp[k]
             q_s_t_a_b = self.q(k, s, t, a, b, resp)
             if q_s_t_a_b == 0:
                 continue
