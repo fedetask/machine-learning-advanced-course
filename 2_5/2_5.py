@@ -79,7 +79,7 @@ def save_results(loglikelihood, topology_array, theta_array, filename):
 
 def em_algorithm(seed_val, samples, num_clusters, max_num_iter=1000):
     em = EM_Algorithm(samples, num_clusters, seed_val=seed_val)
-    em.initialize(100, 5) # Sieving
+    em.initialize(1, 1) # Sieving
     loglikelihood, topology_array, theta_array = em.optimize(max_num_iter)
     return loglikelihood, topology_array, theta_array
     

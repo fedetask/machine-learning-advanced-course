@@ -4,6 +4,7 @@
 
 import numpy as np
 import pickle
+import sys
 
 
 class TreeMixture:
@@ -70,8 +71,7 @@ class TreeMixture:
         p = 1
         while len(visit_list) != 0:
             cur_node = visit_list[0]
-            cur_node_idx = int(cur_node.name)
-            cur_node_val = observation[cur_node_idx]
+            cur_node_val = observation[int(cur_node.name)]
             if cur_node.ancestor == None:
                 p *= cur_node.cat[cur_node_val]
             else:
@@ -427,7 +427,7 @@ class Tree:
             topology_array = np.array([])
 
         return topology_array
-
+    
     def get_theta_array(self):
         """ This function returns the theta array as a numpy array. """
 
