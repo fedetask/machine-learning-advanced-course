@@ -4,6 +4,7 @@ import sys
 from Kruskal_v2 import maximum_spanning_tree
 from Tree import Node, Tree, TreeMixture
 from tqdm import tqdm
+import copy
 
 class EM_Algorithm:
 
@@ -31,6 +32,7 @@ class EM_Algorithm:
         if self.tree_mixture is None:
             raise Exception('EM has not been initialized. Call initialize() first')
         tm, loglikelihoods = self.__iter_optimize(max_num_iter)
+        self.tree_mixture = tm
         topology_list = []
         theta_list = []
         for tree in tm.clusters:
@@ -44,7 +46,7 @@ class EM_Algorithm:
 
 
 
-    def __iter_optimize(self, max_num_iter, tree_mix=None):
+    def __iter_optimize(self, max_num_iter, tree_mix=None, display_progress=True):
         """Performs the given number of iterations of the EM algorithm
         
         Parameters:
@@ -55,24 +57,26 @@ class EM_Algorithm:
             TreeMixture optimized by EM algorithm
             List of likelihoods
         """
-
+        print("Performing EM")
         if tree_mix is None:
             tree_mix = self.tree_mixture
 
         log_likelihoods = []
-        for iter_ in range(max_num_iter):
+        for iter_ in tqdm(range(max_num_iter), disable=(not display_progress)):
             resp = self.responsibilities(tree_mix)
             new_pi = np.sum(resp, axis=0) / self.num_samples
-
+            
             new_trees = []
             for k in range(len(tree_mix.clusters)):
                 graph = self.weighted_graph(k, resp)
                 max_span_tree = maximum_spanning_tree(graph)
-                tree = self.to_tree_obj(max_span_tree, k, self.samples, resp)
+                tree = self.to_tree_obj(max_span_tree, k, resp)
                 new_trees.append(tree)
             tree_mix.clusters = new_trees
             tree_mix.pi = new_pi
             likelihood = tree_mix.likelihood_dataset(self.samples)
+            if iter_ > 0 and likelihood < log_likelihoods[-1]:
+                print("Likelyhood is decreasing")
             log_likelihoods.append(likelihood)
         return tree_mix, log_likelihoods
 
@@ -92,8 +96,8 @@ class EM_Algorithm:
             for k, tree in enumerate(tree_mixture.clusters):
                 resp[n, k] = tree_mixture.prob_observation_given_tree(sample, k)
             resp[n] /= tree_mixture.prob_observation(sample)
-        resp /= tree_mixture.pi
-        resp += sys.float_info.epsilon
+        resp *= tree_mixture.pi
+        resp += sys.float_info.min
         row_sums = np.sum(resp, axis=1)
         resp /= row_sums[:, np.newaxis]
         return resp
@@ -117,27 +121,28 @@ class EM_Algorithm:
             'vertices' : list(range(self.samples.shape[1])),
             'edges'    : [] 
         }
-
+        edges = []
         for s in range(self.num_nodes):
             for t in range(s + 1, self.num_nodes):
-                # Adding edge s->t with weight I_q_k(X_s, X_t)
                 w = self.mutual_information(s, t, k, resp)
                 edge = (s, t, w)
-                graph['edges'].append(edge)
+                edges.append(edge)
+        graph['edges'] = edges
         return graph
 
     def mutual_information(self, s, t, k, resp):
-        sum_resp = np.sum(resp, axis=0)
-        p = 0
+        I = 0
         for a, b in it.product([0, 1], repeat=2):
             q_s_t_a_b = self.q(k, s, t, a, b, resp)
             if q_s_t_a_b == 0:
                 continue
             q_s_a = self.q_marginal(k, s, a, resp)
             q_t_b = self.q_marginal(k, t, b, resp)
-            
-            p += q_s_t_a_b * np.log(q_s_t_a_b / (q_s_a * q_t_b))
-        return p
+            denom = q_s_a * q_t_b
+            if denom == 0: # Handle precision loss in product
+                denom = sys.float_info.min
+            I += q_s_t_a_b * np.log(q_s_t_a_b / denom)
+        return I
 
     def q(self, k, s, t, a, b, resp):
         num = np.sum(np.where((self.samples[:, s] == a) * (self.samples[:, t] == b),
@@ -157,6 +162,7 @@ class EM_Algorithm:
             sieving_tries -- Number of random initializations
             sieving_train -- Number of iterations for each initialization
         """
+        print("Initializing EM ...")
         best_tree_mix = None
         best_likelihood = -float('inf')
         for t in tqdm(range(sieving_tries)):
@@ -164,20 +170,19 @@ class EM_Algorithm:
             tree_mix.simulate_trees(self.seed_val)
             tree_mix.simulate_pi(self.seed_val)
 
-            tm, likelihoods = self.__iter_optimize(sieving_train, tree_mix=tree_mix)
+            tm, likelihoods = self.__iter_optimize(sieving_train, tree_mix=tree_mix, display_progress=False)
             if likelihoods[-1] > best_likelihood:
                 best_likelihood = likelihoods[-1]
                 best_tree_mix = tm
         self.tree_mixture = best_tree_mix
 
-    def to_tree_obj(self, spanning_tree, k, samples, resp):
+    def to_tree_obj(self, spanning_tree, k, resp):
         """Computes a Tree object from the spanning tree. Categorical distributions are
         computed from the samples and responsibilities
 
         Parameters:
             spanning_tree -- List of tuples (v_i, v_j weight)
             k             -- Index of tree we're updating
-            samples       -- Numpy array (num_samples, num_nodes) with samples on the rows
             resp          -- Responsibility matrix (num_samples, num_trees)
 
         Returns:
@@ -185,12 +190,12 @@ class EM_Algorithm:
             organised as a Tree, each node with its MLE q distribution
         """
         tree = Tree()
-        tree.root = Node(spanning_tree[0][0], [])
+        tree.root = Node(0, [])
         tree.k = 2
         visit_list = [tree.root]
         remaining_nodes = spanning_tree
 
-        while len(visit_list) != 0:
+        while len(visit_list) != 0:# and len(remaining_nodes):
             tree.num_nodes += 1
             tree.num_leaves += 1
             cur_node = visit_list[0]
@@ -209,18 +214,19 @@ class EM_Algorithm:
                 cur_node.descendants.append(child)
             visit_list = visit_list[1:] + cur_node.descendants
             remaining_nodes = not_connected # Keep only nodes that aren't connected yet
-        
+
         # Now we built a tree. We traverse it again to set the correct node names and
         # categorical distributions
         visit_list = [tree.root]
         cont = 0
         while len(visit_list) != 0:
             cur_node = visit_list[0]
-            cur_node.name = cont 
+            # TODO: Why does it work if I dont't rename the nodes?
+            #cur_node.name = cont 
             cat = []
             if cur_node.ancestor == None:
-                cat = [self.q_marginal(k, cont, 0, resp),
-                       self.q_marginal(k, cont, 1, resp)]
+                cat = [self.q_marginal(k, cur_node.name, 0, resp),
+                       self.q_marginal(k, cur_node.name, 1, resp)]
             else:
                 parent_idx = int(cur_node.ancestor.name)
                 child_idx = int(cur_node.name)
@@ -228,7 +234,7 @@ class EM_Algorithm:
                     q_given_parent = [0, 0]
                     for c in [0, 1]: # For possible values of child
                         q_given_parent[c] = self.q(k, parent_idx, child_idx, p, c, resp)
-                        q_given_parent[c] /= self.q_marginal(k, parent_idx, p, resp)
+                    q_given_parent /= self.q_marginal(k, parent_idx, p, resp)
                     cat.append(q_given_parent)
             cont += 1
             cur_node.cat = cat
